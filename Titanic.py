@@ -1,17 +1,19 @@
+from math import isnan
 import tensorflow as tf
 import numpy as np 
 import pandas as pd
+import os
 
-print("Hello world")
 train_data = pd.read_csv("/Users/seandoyle/git/TensorflowTesting/titanic/train.csv")
-print(train_data.head())
 
-test_data = pd.read_csv("/Users/seandoyle/git/TensorflowTesting/titanic/test.csv")
-
-def preProcessData(data):
+def preProcessData(data, shouldSeperateLabelsFromData=True):
     data = data.to_numpy()
     data = eliminateFirstColumn(data)
-    y, X = seperateLabelsFromData(data)
+    if(shouldSeperateLabelsFromData):
+        y, X = seperateLabelsFromData(data)
+    else:
+        y = None
+        X = data
     X = scaleX(X)
     
     return y, X
@@ -39,8 +41,7 @@ def scaleX(X):
     X = eliminateTicketNumber(X)
     X = scaleFare(X)
     X = removeLastTwoColumns(X)
-    print("AFTER EVERYTHING")
-    prettyPrint(X)
+    replaceNans(X)
     return X
 
 def prettyPrint(X):
@@ -113,5 +114,39 @@ def removeLastTwoColumns(X):
         newX.append(passenger[:-2])
     return newX
 
-y, X = preProcessData(train_data)
+def replaceNans(X):
+    for i in range(len(X)):
+        for j in range(len(X[0])):
+            if(np.isnan(X[i][j])):
+                X[i][j] = 0
 
+def createModel(shape):
+    inputs = tf.keras.layers.Input(shape=(shape))
+    layerSize = 1024
+    x = tf.keras.layers.Dense(layerSize, activation="relu")(inputs)
+    for i in range(5):
+        x = tf.keras.layers.Dense(layerSize, activation="relu")(x)
+    outputs = tf.keras.layers.Dense(1, activation="sigmoid")(x)
+
+    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    model.compile(
+        optimizer='adam',
+        loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
+        metrics=["accuracy"]
+    )
+    return model
+
+y, X = preProcessData(train_data)
+model = createModel(len(X[0]))
+
+X = np.array(X)
+y = np.array(y)
+
+checkpoint_path = "training_1/cp.ckpt2"
+checkpoint_dir = os.path.dirname(checkpoint_path)
+
+cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                                 save_weights_only=True,
+                                                 verbose=1)
+if(True):
+    model.fit(X, y, epochs=50, validation_split=0.1, callbacks=[cp_callback])
